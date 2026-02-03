@@ -17,7 +17,10 @@ export function AttendancePage() {
   const kitchensQ = useQuery({ queryKey: ['kitchens'], queryFn: api.kitchens });
   const meQ = useQuery({ queryKey: ['attendance-me'], queryFn: api.attendanceMe });
   const [kitchenId, setKitchenId] = useState('');
-  const effectiveKitchenId = useMemo(() => kitchenId || kitchensQ.data?.kitchens?.[0]?.id || '', [kitchenId, kitchensQ.data]);
+  const effectiveKitchenId = useMemo(
+    () => kitchenId || kitchensQ.data?.kitchens?.[0]?.id || '',
+    [kitchenId, kitchensQ.data],
+  );
 
   const checkMut = useMutation({
     mutationFn: async (type: 'IN' | 'OUT') => {
@@ -28,49 +31,69 @@ export function AttendancePage() {
   });
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
-      <div>
-        <h2 style={{ marginBottom: 6 }}>Attendance</h2>
-        <div style={{ opacity: 0.75 }}>Geo-fenced check-in/out</div>
-      </div>
+    <div className="page-grid">
+      <header className="page-header">
+        <h1 className="page-title">Attendance</h1>
+        <p className="page-subtitle">Geo-fenced check-in and check-out</p>
+      </header>
 
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <select value={effectiveKitchenId} onChange={(e) => setKitchenId(e.target.value)}>
-          {(kitchensQ.data?.kitchens ?? []).map((k: any) => (
-            <option key={k.id} value={k.id}>
-              {k.name}
-            </option>
-          ))}
-        </select>
-        <button disabled={!effectiveKitchenId || checkMut.isPending} onClick={() => checkMut.mutate('IN')}>
-          Check in
-        </button>
-        <button disabled={!effectiveKitchenId || checkMut.isPending} onClick={() => checkMut.mutate('OUT')}>
-          Check out
-        </button>
-        {checkMut.data ? (
-          <span style={{ fontSize: 13, opacity: 0.8 }}>
-            {checkMut.data.within ? 'Within geofence' : 'Override used'} • {Math.round(checkMut.data.distanceMeters)}m
-          </span>
-        ) : null}
-      </div>
-
-      <section style={{ border: '1px solid #eee', borderRadius: 12, padding: 12 }}>
-        <div style={{ fontWeight: 600, marginBottom: 10 }}>Recent events</div>
-        {meQ.isLoading ? 'Loading...' : null}
-        <div style={{ display: 'grid', gap: 6 }}>
-          {(meQ.data?.events ?? []).map((e: any) => (
-            <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-              <span>
-                <b>{e.type}</b> <span style={{ opacity: 0.7 }}>{e.method}</span>
+      <section className="card">
+        <div className="card-header">Check in / out</div>
+        <div className="card-body">
+          <div className="attendance-actions">
+            <select
+              value={effectiveKitchenId}
+              onChange={(e) => setKitchenId(e.target.value)}
+              className="select-compact"
+            >
+              {(kitchensQ.data?.kitchens ?? []).map((k: { id: string; name: string }) => (
+                <option key={k.id} value={k.id}>{k.name}</option>
+              ))}
+            </select>
+            <button
+              className="btn-primary"
+              disabled={!effectiveKitchenId || checkMut.isPending}
+              onClick={() => checkMut.mutate('IN')}
+            >
+              Check in
+            </button>
+            <button
+              className="btn-secondary"
+              disabled={!effectiveKitchenId || checkMut.isPending}
+              onClick={() => checkMut.mutate('OUT')}
+            >
+              Check out
+            </button>
+            {checkMut.data ? (
+              <span className="attendance-feedback muted">
+                {checkMut.data.within ? 'Within geofence' : 'Override used'} · {Math.round(checkMut.data.distanceMeters)}m
               </span>
-              <span style={{ opacity: 0.7 }}>{new Date(e.createdAt).toLocaleString()}</span>
-            </div>
-          ))}
-          {!meQ.isLoading && (meQ.data?.events ?? []).length === 0 ? <div style={{ opacity: 0.7 }}>No events yet.</div> : null}
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-header">Recent events</div>
+        <div className="card-body">
+          {meQ.isLoading ? (
+            <div className="loading-state">Loading...</div>
+          ) : (meQ.data?.events ?? []).length === 0 ? (
+            <p className="empty-state">No events yet.</p>
+          ) : (
+            <ul className="event-list">
+              {(meQ.data?.events ?? []).map((e: { id: string; type: string; method: string; createdAt: string }) => (
+                <li key={e.id} className="event-item">
+                  <span>
+                    <strong>{e.type}</strong> <span className="muted">{e.method}</span>
+                  </span>
+                  <span className="muted">{new Date(e.createdAt).toLocaleString()}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
     </div>
   );
 }
-

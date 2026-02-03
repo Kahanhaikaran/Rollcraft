@@ -1,44 +1,48 @@
 import { NavLink, Outlet } from 'react-router-dom';
+import { isDemoMode } from '../lib/api';
 
-const linkStyle = ({ isActive }: { isActive: boolean }) => ({
-  display: 'block',
-  padding: '10px 12px',
-  borderRadius: 8,
-  textDecoration: 'none',
-  color: isActive ? '#111' : '#333',
-  background: isActive ? '#eef2ff' : 'transparent',
-});
+const navItems = [
+  { to: '/', end: true, label: 'Dashboard', icon: '📊' },
+  { to: '/inventory', end: false, label: 'Inventory', icon: '📦' },
+  { to: '/transfers', end: false, label: 'Transfers', icon: '🔄' },
+  { to: '/attendance', end: false, label: 'Attendance', icon: '📍' },
+  { to: '/payroll', end: false, label: 'Payroll', icon: '💰' },
+  { to: '/settings', end: false, label: 'Settings', icon: '⚙️' },
+];
 
 export function Shell() {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', minHeight: '100vh' }}>
-      <aside style={{ padding: 16, borderRight: '1px solid #eee' }}>
-        <div style={{ fontWeight: 700, marginBottom: 12 }}>RollCraft</div>
-        <nav style={{ display: 'grid', gap: 6 }}>
-          <NavLink to="/" end style={linkStyle}>
-            Dashboard
-          </NavLink>
-          <NavLink to="/inventory" style={linkStyle}>
-            Inventory
-          </NavLink>
-          <NavLink to="/transfers" style={linkStyle}>
-            Transfers
-          </NavLink>
-          <NavLink to="/attendance" style={linkStyle}>
-            Attendance
-          </NavLink>
-          <NavLink to="/payroll" style={linkStyle}>
-            Payroll
-          </NavLink>
-          <NavLink to="/settings" style={linkStyle}>
-            Settings
-          </NavLink>
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <span className="sidebar-logo">🍞</span>
+          <span className="sidebar-title">RollCraft</span>
+        </div>
+        <nav className="sidebar-nav">
+          {navItems.map(({ to, end, label, icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              className={({ isActive }) => `sidebar-link ${isActive ? 'sidebar-link-active' : ''}`}
+            >
+              <span className="sidebar-link-icon">{icon}</span>
+              <span>{label}</span>
+            </NavLink>
+          ))}
         </nav>
+        <div className="sidebar-footer">
+          <span className="sidebar-footer-text">Kitchen ops · v1</span>
+        </div>
       </aside>
-      <main style={{ padding: 20 }}>
+      <main className="main">
+        {isDemoMode() ? (
+          <div className="demo-banner">
+            <span>You’re viewing the app in demo mode with sample data. No backend required.</span>
+          </div>
+        ) : null}
         <Outlet />
       </main>
     </div>
   );
 }
-

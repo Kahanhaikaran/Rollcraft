@@ -11,7 +11,6 @@ export function SettingsPage() {
 
   const createKitchen = useMutation({
     mutationFn: async () => {
-      // Note: backend kitchen create requires ADMIN.
       const res = await fetch(`${import.meta.env.VITE_API_BASE ?? 'http://localhost:4000'}/kitchens`, {
         method: 'POST',
         credentials: 'include',
@@ -29,40 +28,73 @@ export function SettingsPage() {
   });
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
-      <div>
-        <h2 style={{ marginBottom: 6 }}>Settings</h2>
-        <div style={{ opacity: 0.75 }}>Kitchens + geofence</div>
-      </div>
+    <div className="page-grid">
+      <header className="page-header">
+        <h1 className="page-title">Settings</h1>
+        <p className="page-subtitle">Kitchens and geofence</p>
+      </header>
 
-      <section style={{ border: '1px solid #eee', borderRadius: 12, padding: 12 }}>
-        <div style={{ fontWeight: 600, marginBottom: 10 }}>Create kitchen</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 1fr 120px', gap: 8 }}>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Kitchen name" />
-          <select value={type} onChange={(e) => setType(e.target.value as any)}>
-            <option value="KING">KING</option>
-            <option value="BRANCH">BRANCH</option>
-          </select>
-          <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Address (optional)" />
-          <button disabled={!name || createKitchen.isPending} onClick={() => createKitchen.mutate()}>
-            {createKitchen.isPending ? 'Saving...' : 'Create'}
-          </button>
+      <section className="card">
+        <div className="card-header">Create kitchen</div>
+        <div className="card-body">
+          <div className="form-row form-row-settings">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Kitchen name"
+            />
+            <select value={type} onChange={(e) => setType(e.target.value as 'KING' | 'BRANCH')}>
+              <option value="KING">KING</option>
+              <option value="BRANCH">BRANCH</option>
+            </select>
+            <input
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Address (optional)"
+            />
+            <button
+              className="btn-primary"
+              disabled={!name || createKitchen.isPending}
+              onClick={() => createKitchen.mutate()}
+            >
+              {createKitchen.isPending ? 'Saving...' : 'Create'}
+            </button>
+          </div>
+          {createKitchen.isError ? (
+            <p className="error-text settings-error">Failed to create (needs ADMIN).</p>
+          ) : null}
         </div>
-        {createKitchen.isError ? <div style={{ color: '#b00020', marginTop: 8 }}>Failed to create (needs ADMIN).</div> : null}
       </section>
 
-      <section style={{ border: '1px solid #eee', borderRadius: 12, padding: 12 }}>
-        <div style={{ fontWeight: 600, marginBottom: 10 }}>Kitchens</div>
-        {kitchensQ.isLoading ? 'Loading...' : null}
-        <ul style={{ margin: 0, paddingLeft: 18 }}>
-          {(kitchensQ.data?.kitchens ?? []).map((k: any) => (
-            <li key={k.id}>
-              {k.name} ({k.type}) <span style={{ opacity: 0.65 }}>radius {k.geofenceRadiusMeters}m</span>
-            </li>
-          ))}
-        </ul>
+      <section className="card">
+        <div className="card-header">Kitchens</div>
+        <div className="card-body">
+          {kitchensQ.isLoading ? (
+            <div className="loading-state">Loading...</div>
+          ) : (kitchensQ.data?.kitchens ?? []).length === 0 ? (
+            <p className="empty-state">No kitchens yet.</p>
+          ) : (
+            <ul className="list-modern">
+              {(kitchensQ.data?.kitchens ?? []).map((k: {
+                id: string;
+                name: string;
+                type: string;
+                geofenceRadiusMeters?: number;
+              }) => (
+                <li key={k.id} className="list-item-with-meta">
+                  <span className="list-item-icon">🏠</span>
+                  <span>
+                    <strong>{k.name}</strong> <span className="muted">({k.type})</span>
+                    {k.geofenceRadiusMeters != null ? (
+                      <span className="muted"> · radius {k.geofenceRadiusMeters}m</span>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </section>
     </div>
   );
 }
-

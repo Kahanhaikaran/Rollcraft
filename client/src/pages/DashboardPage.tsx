@@ -6,36 +6,47 @@ export function DashboardPage() {
   const unpaid = useQuery({ queryKey: ['payroll-unpaid'], queryFn: api.unpaidPayroll });
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
-      <div>
-        <h2 style={{ marginBottom: 6 }}>Dashboard</h2>
-        <div style={{ opacity: 0.75 }}>Quick overview</div>
-      </div>
+    <div className="page-grid">
+      <header className="page-header">
+        <h1 className="page-title">Dashboard</h1>
+        <p className="page-subtitle">Quick overview of your kitchens and payroll</p>
+      </header>
 
-      <section style={{ border: '1px solid #eee', borderRadius: 12, padding: 12 }}>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Kitchens</div>
-        {kitchens.isLoading ? 'Loading...' : null}
-        {kitchens.data ? (
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {kitchens.data.kitchens.map((k: any) => (
-              <li key={k.id}>
-                {k.name} ({k.type})
-              </li>
-            ))}
-          </ul>
-        ) : null}
+      <section className="card">
+        <div className="card-header">Kitchens</div>
+        <div className="card-body">
+          {kitchens.isLoading ? (
+            <div className="loading-state">Loading...</div>
+          ) : kitchens.data?.kitchens?.length ? (
+            <ul className="list-modern">
+              {kitchens.data.kitchens.map((k: { id: string; name: string; type: string }) => (
+                <li key={k.id} className="list-item-with-meta">
+                  <span className="list-item-icon">🏠</span>
+                  <span><strong>{k.name}</strong> <span className="muted">({k.type})</span></span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="empty-state">No kitchens yet.</p>
+          )}
+        </div>
       </section>
 
-      <section style={{ border: '1px solid #eee', borderRadius: 12, padding: 12 }}>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Payroll reminders (unpaid)</div>
-        {unpaid.isLoading ? 'Loading...' : null}
-        {unpaid.data ? (
-          <div style={{ opacity: 0.85 }}>{unpaid.data.entries.length} unpaid entries</div>
-        ) : (
-          <div style={{ opacity: 0.65 }}>Requires HR role</div>
-        )}
+      <section className="card">
+        <div className="card-header">Payroll reminders</div>
+        <div className="card-body">
+          {unpaid.isLoading ? (
+            <div className="loading-state">Loading...</div>
+          ) : unpaid.data ? (
+            <div className="stat-block">
+              <span className="stat-value">{unpaid.data.entries.length}</span>
+              <span className="stat-label">Unpaid entries</span>
+            </div>
+          ) : (
+            <p className="muted">Requires HR role to view unpaid payroll.</p>
+          )}
+        </div>
       </section>
     </div>
   );
 }
-

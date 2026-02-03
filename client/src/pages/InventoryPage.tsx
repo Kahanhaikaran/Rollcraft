@@ -19,58 +19,69 @@ export function InventoryPage() {
   });
 
   return (
-    <div style={{ display: 'grid', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+    <div className="page-grid">
+      <header className="page-header page-header-row">
         <div>
-          <h2 style={{ marginBottom: 6 }}>Inventory</h2>
-          <div style={{ opacity: 0.75 }}>Stock by kitchen</div>
+          <h1 className="page-title">Inventory</h1>
+          <p className="page-subtitle">Stock by kitchen</p>
         </div>
-        <select value={effectiveKitchenId} onChange={(e) => setKitchenId(e.target.value)}>
-          {(kitchensQ.data?.kitchens ?? []).map((k: any) => (
+        <select
+          className="select-compact"
+          value={effectiveKitchenId}
+          onChange={(e) => setKitchenId(e.target.value)}
+        >
+          {(kitchensQ.data?.kitchens ?? []).map((k: { id: string; name: string }) => (
             <option key={k.id} value={k.id}>
               {k.name}
             </option>
           ))}
         </select>
-      </div>
+      </header>
 
-      <div style={{ border: '1px solid #eee', borderRadius: 12, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ background: '#fafafa' }}>
-              <th style={{ textAlign: 'left', padding: 10, borderBottom: '1px solid #eee' }}>Item</th>
-              <th style={{ textAlign: 'right', padding: 10, borderBottom: '1px solid #eee' }}>On hand</th>
-              <th style={{ textAlign: 'right', padding: 10, borderBottom: '1px solid #eee' }}>Avg cost</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stockQ.isLoading ? (
+      <section className="card card-table-wrap">
+        <div className="table-responsive">
+          <table className="table-modern">
+            <thead>
               <tr>
-                <td style={{ padding: 10 }} colSpan={3}>
-                  Loading...
-                </td>
+                <th>Item</th>
+                <th className="num">On hand</th>
+                <th className="num">Avg cost</th>
               </tr>
-            ) : null}
-            {(stockQ.data?.stock ?? []).map((row: any) => (
-              <tr key={row.itemId}>
-                <td style={{ padding: 10, borderBottom: '1px solid #f2f2f2' }}>
-                  {row.item.name} <span style={{ opacity: 0.65 }}>({row.item.uom})</span>
-                </td>
-                <td style={{ padding: 10, textAlign: 'right', borderBottom: '1px solid #f2f2f2' }}>{row.onHandQty}</td>
-                <td style={{ padding: 10, textAlign: 'right', borderBottom: '1px solid #f2f2f2' }}>{row.avgCost.toFixed?.(2) ?? row.avgCost}</td>
-              </tr>
-            ))}
-            {!stockQ.isLoading && (stockQ.data?.stock ?? []).length === 0 ? (
-              <tr>
-                <td style={{ padding: 10, opacity: 0.7 }} colSpan={3}>
-                  No stock rows yet. Create items and receive purchases/transfers.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {stockQ.isLoading ? (
+                <tr>
+                  <td colSpan={3} className="loading-cell">
+                    Loading...
+                  </td>
+                </tr>
+              ) : (stockQ.data?.stock ?? []).length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="empty-cell">
+                    No stock yet. Create items and receive purchases or transfers.
+                  </td>
+                </tr>
+              ) : (
+                (stockQ.data?.stock ?? []).map((row: {
+                  itemId: string;
+                  item: { name: string; uom: string };
+                  onHandQty: number;
+                  avgCost: number;
+                }) => (
+                  <tr key={row.itemId}>
+                    <td>
+                      <span className="cell-item">{row.item.name}</span>
+                      <span className="muted"> ({row.item.uom})</span>
+                    </td>
+                    <td className="num">{row.onHandQty}</td>
+                    <td className="num">{row.avgCost?.toFixed?.(2) ?? row.avgCost}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }
-

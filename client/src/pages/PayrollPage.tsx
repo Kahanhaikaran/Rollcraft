@@ -5,37 +5,52 @@ export function PayrollPage() {
   const unpaidQ = useQuery({ queryKey: ['payroll-unpaid'], queryFn: api.unpaidPayroll });
 
   return (
-    <div style={{ display: 'grid', gap: 12 }}>
-      <div>
-        <h2 style={{ marginBottom: 6 }}>Payroll</h2>
-        <div style={{ opacity: 0.75 }}>Unpaid entries (reminders)</div>
-      </div>
+    <div className="page-grid">
+      <header className="page-header">
+        <h1 className="page-title">Payroll</h1>
+        <p className="page-subtitle">Unpaid entries and reminders</p>
+      </header>
 
-      <section style={{ border: '1px solid #eee', borderRadius: 12, padding: 12 }}>
-        {unpaidQ.isLoading ? 'Loading...' : null}
-        {unpaidQ.data ? (
-          <div style={{ display: 'grid', gap: 8 }}>
-            {unpaidQ.data.entries.map((e: any) => (
-              <div key={e.id} style={{ border: '1px solid #f0f0f0', borderRadius: 10, padding: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <div>
-                    <b>{e.employee?.employeeProfile?.fullName ?? e.employeeUserId}</b>
-                    <span style={{ marginLeft: 8, opacity: 0.7, fontSize: 12 }}>{e.period?.month}</span>
+      <section className="card">
+        <div className="card-header">Unpaid entries</div>
+        <div className="card-body">
+          {unpaidQ.isLoading ? (
+            <div className="loading-state">Loading...</div>
+          ) : !unpaidQ.data ? (
+            <p className="muted">Requires HR role to view unpaid payroll.</p>
+          ) : unpaidQ.data.entries.length === 0 ? (
+            <p className="empty-state">No unpaid entries.</p>
+          ) : (
+            <div className="payroll-list">
+              {unpaidQ.data.entries.map((e: {
+                id: string;
+                employee?: { employeeProfile?: { fullName: string } };
+                employeeUserId: string;
+                period?: { month: string };
+                netPay: number;
+                computedSalary: number;
+                overtimePay: number;
+                deductions: number;
+              }) => (
+                <div key={e.id} className="payroll-card">
+                  <div className="payroll-card-top">
+                    <div>
+                      <strong>{e.employee?.employeeProfile?.fullName ?? e.employeeUserId}</strong>
+                      {e.period?.month ? (
+                        <span className="muted payroll-period"> {e.period.month}</span>
+                      ) : null}
+                    </div>
+                    <span className="payroll-amount">₹{e.netPay}</span>
                   </div>
-                  <div style={{ fontWeight: 600 }}>₹{e.netPay}</div>
+                  <div className="payroll-details muted">
+                    Salary {e.computedSalary} · OT {e.overtimePay} · Deductions {e.deductions}
+                  </div>
                 </div>
-                <div style={{ fontSize: 12, opacity: 0.75 }}>
-                  Salary {e.computedSalary} • OT {e.overtimePay} • Deductions {e.deductions}
-                </div>
-              </div>
-            ))}
-            {unpaidQ.data.entries.length === 0 ? <div style={{ opacity: 0.7 }}>No unpaid entries.</div> : null}
-          </div>
-        ) : (
-          <div style={{ opacity: 0.7 }}>Requires HR role.</div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );
 }
-
