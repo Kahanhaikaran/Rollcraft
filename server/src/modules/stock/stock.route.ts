@@ -32,6 +32,19 @@ const adjustmentSchema = z.object({
   type: z.enum(['ADJUSTMENT', 'WASTAGE']).default('ADJUSTMENT'),
 });
 
+const consumptionSchema = z.object({
+  kitchenId: z.string().min(1),
+  lines: z
+    .array(
+      z.object({
+        itemId: z.string().min(1),
+        qty: z.number().positive(),
+      }),
+    )
+    .min(1),
+  reason: z.string().optional(),
+});
+
 stockRouter.post('/stock/adjustments', requireAuth, requireRoleAtLeast(Role.STOREKEEPER), async (req, res, next) => {
   try {
     const body = adjustmentSchema.parse(req.body);
@@ -76,6 +89,59 @@ stockRouter.post('/stock/adjustments', requireAuth, requireRoleAtLeast(Role.STOR
     });
 
     res.json({ ok: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+stockRouter.post('/stock/consumption', requireAuth, requireRoleAtLeast(Role.STOREKEEPER), async (req, res, next) => {
+  try {
+    const body = consumptionSchema.parse(req.body);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const ledgers: Array<{ ledger: unknown; nextStock: unknown }> = [];
+      for (const line of body.lines) {
+        const item = await tx.item.findUnique({ where: { id: line.itemId } });
+        if (!item) throw new HttpError(404, 'ItemNotFound');
+
+        const current = await tx.kitchenStock.findUnique({
+          where: { kitchenId_itemId: { kitchenId: body.kitchenId, itemId: line.itemId } },
+        });
+        const onHandQty = (current?.onHandQty ?? 0) - line.qty;
+        if (onHandQty < 0) throw new HttpError(400, 'InsufficientStock');
+
+        await tx.stockLedger.create({
+          data: {
+            kitchenId: body.kitchenId,
+            itemId: line.itemId,
+            type: 'CONSUMPTION',
+            qtyDelta: -line.qty,
+            unitCost: current?.avgCost ?? null,
+            refType: 'CONSUMPTION',
+            refId: null,
+            createdByUserId: req.user?.id ?? null,
+          },
+        });
+
+        const nextStock = await tx.kitchenStock.upsert({
+          where: { kitchenId_itemId: { kitchenId: body.kitchenId, itemId: line.itemId } },
+          create: { kitchenId: body.kitchenId, itemId: line.itemId, onHandQty, avgCost: current?.avgCost ?? 0 },
+          update: { onHandQty },
+        });
+        ledgers.push({ ledger: {}, nextStock });
+      }
+      return ledgers;
+    });
+
+    await auditLog({
+      actorUserId: req.user?.id,
+      action: 'STOCK_CONSUMPTION',
+      entityType: 'StockLedger',
+      entityId: body.kitchenId,
+      meta: body,
+    });
+
+    res.json({ ok: true, recorded: body.lines.length });
   } catch (err) {
     next(err);
   }

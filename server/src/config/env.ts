@@ -9,6 +9,9 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(16),
   JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().min(60).default(900),
   JWT_REFRESH_TTL_SECONDS: z.coerce.number().int().min(3600).default(60 * 60 * 24 * 30),
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(60000).default(15 * 60 * 1000),
+  RATE_LIMIT_MAX: z.coerce.number().int().min(10).default(200),
+  RATE_LIMIT_LOGIN_MAX: z.coerce.number().int().min(3).default(10),
 });
 
 export type Env = z.infer<typeof envSchema>;

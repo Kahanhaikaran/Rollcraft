@@ -104,8 +104,29 @@ function getDemoResponse(path: string, method: string, body?: string): unknown {
     if (path.includes('/transfers') && !path.includes('/approve') && !path.includes('/dispatch') && !path.includes('/receive')) return { ok: true as const, transfers: demoTransfersList };
     if (path.includes('/attendance/me')) return { ok: true as const, events: demoAttendanceEvents };
     if (path.includes('/payroll/unpaid')) return { ok: true as const, entries: demoPayrollEntries };
+    if (path.includes('/dashboard/stats')) {
+      return {
+        ok: true as const,
+        stats: {
+          kitchensCount: 3,
+          lowStockCount: 2,
+          lowStockItems: [
+            { itemId: 'i4', itemName: 'Yeast', uom: 'g', onHandQty: 450, reorderPoint: 500 },
+            { itemId: 'i5', itemName: 'Oil', uom: 'L', onHandQty: 12, reorderPoint: 15 },
+          ],
+          depletionLast7Days: 85,
+          depletionLast24Hours: 12,
+          depletionByType: { CONSUMPTION: { totalQty: 85, count: 14 }, TRANSFER_OUT: { totalQty: 35, count: 2 } },
+          recentLedger: [
+            { id: 'l1', type: 'CONSUMPTION', qtyDelta: -5, itemName: 'Flour', uom: 'kg', createdAt: new Date().toISOString() },
+            { id: 'l2', type: 'PURCHASE', qtyDelta: 50, itemName: 'Rice', uom: 'kg', createdAt: new Date(Date.now() - 3600000).toISOString() },
+          ],
+        },
+      };
+    }
   }
   if (method === 'POST') {
+    if (path.includes('/auth/logout')) return { ok: true as const };
     if (path.includes('/transfers') && !path.includes('/approve') && !path.includes('/dispatch') && !path.includes('/receive')) {
       const payload = body ? (JSON.parse(body) as { fromKitchenId?: string; toKitchenId?: string; lines?: Array<{ itemId: string; qty: number }> }) : {};
       const fromK = demoKitchens.find((k) => k.id === payload.fromKitchenId) ?? { name: 'From' };
@@ -127,11 +148,14 @@ function getDemoResponse(path: string, method: string, body?: string): unknown {
     if (path.includes('/attendance/check')) {
       return { ok: true as const, event: { id: 'e-demo' }, within: true, distanceMeters: 45, geofenceRadiusMeters: 200 };
     }
+    if (path.includes('/stock/consumption')) {
+      return { ok: true as const, recorded: 1 };
+    }
   }
   return { ok: true as const };
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, skipRetry = false): Promise<T> {
   if (accessToken === DEMO_TOKEN) {
     const mock = getDemoResponse(path, init?.method ?? 'GET', init?.body as string | undefined);
     return new Promise((res) => setTimeout(() => res(mock as T), 400));
@@ -148,6 +172,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const json = (await res.json()) as Record<string, unknown>;
   if (!res.ok || json?.ok === false) {
+    if (res.status === 401 && !skipRetry && !path.includes('/auth/')) {
+      try {
+        const refreshRes = await request<ApiOk<{ accessToken: string }>>('/auth/refresh', { method: 'POST' }, true);
+        setAccessToken(refreshRes.accessToken);
+        if (typeof localStorage !== 'undefined') localStorage.setItem('rollcraft_access_token', refreshRes.accessToken);
+        return request<T>(path, init, true);
+      } catch {
+        setAccessToken(null);
+        if (typeof localStorage !== 'undefined') localStorage.removeItem('rollcraft_access_token');
+        if (typeof window !== 'undefined') window.location.href = '/login';
+      }
+    }
     const err: ApiErr = json?.ok === false ? (json as ApiErr) : { ok: false, error: 'HttpError', message: res.statusText };
     throw err;
   }
@@ -161,6 +197,8 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ identifier, password }) },
     ),
   refresh: () => request<ApiOk<{ accessToken: string }>>('/auth/refresh', { method: 'POST' }),
+  logout: () =>
+    request<ApiOk<Record<string, never>>>('/auth/logout', { method: 'POST' }),
 
   kitchens: () => request<ApiOk<{ kitchens: unknown[] }>>('/kitchens'),
   items: () => request<ApiOk<{ items: unknown[] }>>('/items'),
@@ -184,4 +222,20 @@ export const api = {
     }),
 
   unpaidPayroll: () => request<ApiOk<{ entries: unknown[] }>>('/payroll/unpaid'),
+
+  dashboardStats: (kitchenId?: string) =>
+    request<ApiOk<{
+      stats: {
+        kitchensCount: number;
+        lowStockCount: number;
+        lowStockItems: Array<{ itemId: string; itemName: string; uom: string; onHandQty: number; reorderPoint: number }>;
+        depletionLast7Days: number;
+        depletionLast24Hours: number;
+        depletionByType: Record<string, { totalQty: number; count: number }>;
+        recentLedger: Array<{ id: string; type: string; qtyDelta: number; itemName: string; uom: string; createdAt: string }>;
+      };
+    }>>(`/dashboard/stats${kitchenId ? `?kitchenId=${encodeURIComponent(kitchenId)}` : ''}`),
+
+  recordConsumption: (input: { kitchenId: string; lines: { itemId: string; qty: number }[]; reason?: string }) =>
+    request<ApiOk<{ recorded: number }>>('/stock/consumption', { method: 'POST', body: JSON.stringify(input) }),
 };

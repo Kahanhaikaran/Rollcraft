@@ -351,6 +351,70 @@ button:disabled {
   color: var(--color-muted);
 }
 
+/* Dashboard */
+.dashboard-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+.stat-card {
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.stat-card-primary .stat-card-value { color: var(--color-primary); }
+.stat-card-warning .stat-card-value { color: #d97706; }
+.stat-card-info .stat-card-value { color: #0ea5e9; }
+.stat-card-success .stat-card-value { color: #059669; }
+
+.stat-card-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.stat-card-label {
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+}
+
+.dashboard-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .dashboard-cols { grid-template-columns: 1fr; }
+}
+
+.depletion-breakdown { display: flex; flex-direction: column; gap: 0.5rem; }
+.depletion-row { display: flex; align-items: center; gap: 0.75rem; font-size: 0.9375rem; }
+.depletion-type { font-weight: 500; text-transform: capitalize; min-width: 120px; }
+.depletion-qty { font-weight: 600; color: var(--color-primary); }
+
+.low-stock-item { border-left: 3px solid #d97706; padding-left: 0.5rem; }
+
+.ledger-type {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.ledger-type-consumption { background: #fef3c7; color: #92400e; }
+.ledger-type-purchase { background: #d1fae5; color: #065f46; }
+.ledger-type-transfer_in { background: #dbeafe; color: #1e40af; }
+.ledger-type-transfer_out { background: #e0e7ff; color: #3730a3; }
+.ledger-type-adjustment { background: #f3e8ff; color: #5b21b6; }
+.ledger-type-wastage { background: #fee2e2; color: #991b1b; }
+
 .select-compact {
   min-width: 180px;
 }

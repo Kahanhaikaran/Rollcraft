@@ -1,9 +1,24 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '../lib/api';
+import { useNavigate } from 'react-router-dom';
+import { api, isDemoMode } from '../lib/api';
+import { saveAccessToken } from '../lib/auth';
 
 export function SettingsPage() {
   const qc = useQueryClient();
+  const nav = useNavigate();
+
+  async function handleLogout() {
+    if (!isDemoMode()) {
+      try {
+        await api.logout();
+      } catch {
+        /* ignore */
+      }
+    }
+    saveAccessToken(null);
+    nav('/login', { replace: true });
+  }
   const kitchensQ = useQuery({ queryKey: ['kitchens'], queryFn: api.kitchens });
   const [name, setName] = useState('');
   const [type, setType] = useState<'KING' | 'BRANCH'>('BRANCH');
@@ -29,9 +44,14 @@ export function SettingsPage() {
 
   return (
     <div className="page-grid">
-      <header className="page-header">
-        <h1 className="page-title">Settings</h1>
-        <p className="page-subtitle">Kitchens and geofence</p>
+      <header className="page-header page-header-row">
+        <div>
+          <h1 className="page-title">Settings</h1>
+          <p className="page-subtitle">Kitchens, geofence & account</p>
+        </div>
+        <button type="button" className="btn-secondary" onClick={handleLogout}>
+          Sign out
+        </button>
       </header>
 
       <section className="card">
