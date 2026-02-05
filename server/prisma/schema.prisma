@@ -149,6 +149,8 @@ model Item {
   transferLines TransferLine[]
 
   @@unique([name, uom])
+  @@index([category])
+  @@index([name])
 }
 
 model KitchenStock {

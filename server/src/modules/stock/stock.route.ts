@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../db/prisma.js';
 import { HttpError } from '../../lib/http.js';
 import { requireAuth } from '../auth/auth.middleware.js';
@@ -13,11 +14,33 @@ stockRouter.get('/stock', requireAuth, async (req, res, next) => {
     const kitchenId = typeof req.query.kitchenId === 'string' ? req.query.kitchenId : req.user?.kitchenId;
     if (!kitchenId) throw new HttpError(400, 'ValidationError', 'kitchenId is required');
 
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const category = typeof req.query.category === 'string' ? req.query.category : undefined;
+    const groupBy = req.query.groupBy === 'category';
+
+    const itemWhere: Prisma.ItemWhereInput = { isActive: true };
+    if (q) itemWhere.name = { contains: q, mode: 'insensitive' };
+    if (category) itemWhere.category = category;
+
     const rows = await prisma.kitchenStock.findMany({
-      where: { kitchenId },
+      where: {
+        kitchenId,
+        item: itemWhere,
+      },
       include: { item: true },
-      orderBy: { item: { name: 'asc' } },
+      orderBy: [{ item: { category: 'asc' } }, { item: { name: 'asc' } }],
     });
+
+    if (groupBy) {
+      const groups: Record<string, typeof rows> = {};
+      for (const row of rows) {
+        const cat = row.item.category ?? 'UNCATEGORIZED';
+        if (!groups[cat]) groups[cat] = [];
+        groups[cat].push(row);
+      }
+      return res.json({ ok: true, kitchenId, stock: rows, grouped: groups });
+    }
+
     res.json({ ok: true, kitchenId, stock: rows });
   } catch (err) {
     next(err);
@@ -53,11 +76,19 @@ stockRouter.post('/stock/adjustments', requireAuth, requireRoleAtLeast(Role.STOR
     if (!item) throw new HttpError(404, 'ItemNotFound');
 
     const result = await prisma.$transaction(async (tx) => {
-      const ledger = await tx.stockLedger.create({
+      const locked = await tx.$queryRaw<
+        { onHandQty: number; avgCost: number }[]
+      >`SELECT "onHandQty", "avgCost" FROM "KitchenStock" WHERE "kitchenId" = ${body.kitchenId} AND "itemId" = ${body.itemId} FOR UPDATE`;
+      const current = locked[0];
+      const curQty = current?.onHandQty ?? 0;
+      const onHandQty = curQty + body.qtyDelta;
+      if (onHandQty < 0) throw new HttpError(400, 'InsufficientStock');
+
+      await tx.stockLedger.create({
         data: {
           kitchenId: body.kitchenId,
           itemId: body.itemId,
-          type: body.type as any,
+          type: body.type as 'ADJUSTMENT' | 'WASTAGE',
           qtyDelta: body.qtyDelta,
           refType: 'STOCK_ADJUSTMENT',
           refId: null,
@@ -65,19 +96,13 @@ stockRouter.post('/stock/adjustments', requireAuth, requireRoleAtLeast(Role.STOR
         },
       });
 
-      const current = await tx.kitchenStock.findUnique({
-        where: { kitchenId_itemId: { kitchenId: body.kitchenId, itemId: body.itemId } },
-      });
-      const onHandQty = (current?.onHandQty ?? 0) + body.qtyDelta;
-      if (onHandQty < 0) throw new HttpError(400, 'InsufficientStock');
-
       const nextStock = await tx.kitchenStock.upsert({
         where: { kitchenId_itemId: { kitchenId: body.kitchenId, itemId: body.itemId } },
         create: { kitchenId: body.kitchenId, itemId: body.itemId, onHandQty, avgCost: current?.avgCost ?? 0 },
         update: { onHandQty },
       });
 
-      return { ledger, nextStock };
+      return { nextStock };
     });
 
     await auditLog({
@@ -98,17 +123,18 @@ stockRouter.post('/stock/consumption', requireAuth, requireRoleAtLeast(Role.STOR
   try {
     const body = consumptionSchema.parse(req.body);
 
-    const result = await prisma.$transaction(async (tx) => {
-      const ledgers: Array<{ ledger: unknown; nextStock: unknown }> = [];
+    await prisma.$transaction(async (tx) => {
       for (const line of body.lines) {
         const item = await tx.item.findUnique({ where: { id: line.itemId } });
         if (!item) throw new HttpError(404, 'ItemNotFound');
 
-        const current = await tx.kitchenStock.findUnique({
-          where: { kitchenId_itemId: { kitchenId: body.kitchenId, itemId: line.itemId } },
-        });
-        const onHandQty = (current?.onHandQty ?? 0) - line.qty;
-        if (onHandQty < 0) throw new HttpError(400, 'InsufficientStock');
+        const locked = await tx.$queryRaw<
+          { onHandQty: number; avgCost: number }[]
+        >`SELECT "onHandQty", "avgCost" FROM "KitchenStock" WHERE "kitchenId" = ${body.kitchenId} AND "itemId" = ${line.itemId} FOR UPDATE`;
+        const current = locked[0];
+        const curQty = current?.onHandQty ?? 0;
+        const onHandQty = curQty - line.qty;
+        if (onHandQty < 0) throw new HttpError(400, 'InsufficientStock', `${item.name}: need ${line.qty} ${item.uom}, only ${curQty} on hand`);
 
         await tx.stockLedger.create({
           data: {
@@ -123,14 +149,12 @@ stockRouter.post('/stock/consumption', requireAuth, requireRoleAtLeast(Role.STOR
           },
         });
 
-        const nextStock = await tx.kitchenStock.upsert({
+        await tx.kitchenStock.upsert({
           where: { kitchenId_itemId: { kitchenId: body.kitchenId, itemId: line.itemId } },
           create: { kitchenId: body.kitchenId, itemId: line.itemId, onHandQty, avgCost: current?.avgCost ?? 0 },
           update: { onHandQty },
         });
-        ledgers.push({ ledger: {}, nextStock });
       }
-      return ledgers;
     });
 
     await auditLog({

@@ -89,20 +89,14 @@ transfersRouter.post('/transfers/:id/dispatch', requireAuth, requireRoleAtLeast(
     requireStatus(transfer, ['APPROVED']);
 
     const updated = await prisma.$transaction(async (tx) => {
-      // Ensure stock exists
       for (const line of transfer.lines) {
-        const current = await tx.kitchenStock.findUnique({
-          where: { kitchenId_itemId: { kitchenId: transfer.fromKitchenId, itemId: line.itemId } },
-        });
-        if ((current?.onHandQty ?? 0) < line.qty) throw new HttpError(400, 'InsufficientStock');
-      }
-
-      // Deduct + ledger out
-      for (const line of transfer.lines) {
-        const current = await tx.kitchenStock.findUnique({
-          where: { kitchenId_itemId: { kitchenId: transfer.fromKitchenId, itemId: line.itemId } },
-        });
-        const newQty = (current?.onHandQty ?? 0) - line.qty;
+        const locked = await tx.$queryRaw<
+          { onHandQty: number; avgCost: number }[]
+        >`SELECT "onHandQty", "avgCost" FROM "KitchenStock" WHERE "kitchenId" = ${transfer.fromKitchenId} AND "itemId" = ${line.itemId} FOR UPDATE`;
+        const current = locked[0];
+        const curQty = current?.onHandQty ?? 0;
+        if (curQty < line.qty) throw new HttpError(400, 'InsufficientStock');
+        const newQty = curQty - line.qty;
         await tx.kitchenStock.upsert({
           where: { kitchenId_itemId: { kitchenId: transfer.fromKitchenId, itemId: line.itemId } },
           create: { kitchenId: transfer.fromKitchenId, itemId: line.itemId, onHandQty: newQty, avgCost: current?.avgCost ?? 0 },
