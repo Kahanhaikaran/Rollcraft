@@ -1,11 +1,36 @@
-import { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, isDemoMode } from '../lib/api';
+
+const CATEGORY_LABELS: Record<string, string> = {
+  BASE_CORE: 'Base / Core',
+  VEG_FILLINGS: 'Veg Fillings',
+  NON_VEG: 'Non-Veg',
+  MOMOS_SPECIFIC: 'Momos',
+  ROLLS_WRAPS: 'Rolls / Wraps',
+  SPICES_MASALA: 'Spices & Masala',
+  SAUCES: 'Sauces',
+  OILS_FATS: 'Oils & Fats',
+  PACKAGING: 'Packaging',
+  MISC: 'Misc',
+  UNCATEGORIZED: 'Other',
+};
+
+type StockRow = {
+  itemId: string;
+  item: { name: string; uom: string; category?: string | null };
+  onHandQty: number;
+  avgCost: number;
+};
 
 export function InventoryPage() {
   const qc = useQueryClient();
   const kitchensQ = useQuery({ queryKey: ['kitchens'], queryFn: api.kitchens });
+  const categoriesQ = useQuery({ queryKey: ['item-categories'], queryFn: api.itemCategories });
   const [kitchenId, setKitchenId] = useState<string>('');
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [groupByCategory, setGroupByCategory] = useState(true);
   const [consumeItemId, setConsumeItemId] = useState('');
   const [consumeQty, setConsumeQty] = useState('');
 
@@ -16,8 +41,13 @@ export function InventoryPage() {
   }, [kitchenId, kitchensQ.data]);
 
   const stockQ = useQuery({
-    queryKey: ['stock', effectiveKitchenId],
-    queryFn: () => api.stock(effectiveKitchenId),
+    queryKey: ['stock', effectiveKitchenId, search, categoryFilter, groupByCategory],
+    queryFn: () =>
+      api.stock(effectiveKitchenId, {
+        q: search || undefined,
+        category: categoryFilter || undefined,
+        groupBy: groupByCategory,
+      }),
     enabled: !!effectiveKitchenId,
   });
 
@@ -35,19 +65,28 @@ export function InventoryPage() {
     },
   });
 
-  const stockItems = (stockQ.data?.stock ?? []) as Array<{
-    itemId: string;
-    item: { name: string; uom: string };
-    onHandQty: number;
-    avgCost: number;
-  }>;
+  const stockData = stockQ.data;
+  const stockItems = (stockData?.stock ?? []) as StockRow[];
+  const grouped = stockData?.grouped as Record<string, StockRow[]> | undefined;
+  const categories = (categoriesQ.data?.categories ?? []) as string[];
+
+  const renderStockRow = (row: StockRow) => (
+    <tr key={row.itemId}>
+      <td>
+        <span className="cell-item">{row.item.name}</span>
+        <span className="muted"> ({row.item.uom})</span>
+      </td>
+      <td className="num">{row.onHandQty}</td>
+      <td className="num">{row.avgCost?.toFixed?.(2) ?? row.avgCost}</td>
+    </tr>
+  );
 
   return (
     <div className="page-grid">
       <header className="page-header page-header-row">
         <div>
           <h1 className="page-title">Inventory</h1>
-          <p className="page-subtitle">Stock by kitchen</p>
+          <p className="page-subtitle">Stock by kitchen · rolls & momos SKUs</p>
         </div>
         <select
           className="select-compact"
@@ -61,6 +100,41 @@ export function InventoryPage() {
           ))}
         </select>
       </header>
+
+      <section className="card">
+        <div className="card-header">Filters & search</div>
+        <div className="card-body">
+          <div className="form-row inventory-filters">
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search items..."
+              className="input-search"
+            />
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="select-compact"
+            >
+              <option value="">All categories</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {CATEGORY_LABELS[c] ?? c}
+                </option>
+              ))}
+            </select>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={groupByCategory}
+                onChange={(e) => setGroupByCategory(e.target.checked)}
+              />
+              Group by category
+            </label>
+          </div>
+        </div>
+      </section>
 
       {!isDemoMode() && stockItems.length > 0 ? (
         <section className="card">
@@ -98,7 +172,7 @@ export function InventoryPage() {
             </div>
             {recordConsumption.isError ? (
               <p className="error-text" style={{ marginTop: '0.5rem', marginBottom: 0 }}>
-                Failed to record (needs STOREKEEPER role).
+                {(recordConsumption.error as { message?: string })?.message ?? 'Failed to record (needs STOREKEEPER role).'}
               </p>
             ) : null}
           </div>
@@ -106,6 +180,9 @@ export function InventoryPage() {
       ) : null}
 
       <section className="card card-table-wrap">
+        <div className="card-header">
+          Stock ({stockItems.length} items)
+        </div>
         <div className="table-responsive">
           <table className="table-modern">
             <thead>
@@ -122,28 +199,26 @@ export function InventoryPage() {
                     Loading...
                   </td>
                 </tr>
-              ) : (stockQ.data?.stock ?? []).length === 0 ? (
+              ) : stockItems.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="empty-cell">
                     No stock yet. Create items and receive purchases or transfers.
                   </td>
                 </tr>
-              ) : (
-                stockItems.map((row: {
-                  itemId: string;
-                  item: { name: string; uom: string };
-                  onHandQty: number;
-                  avgCost: number;
-                }) => (
-                  <tr key={row.itemId}>
-                    <td>
-                      <span className="cell-item">{row.item.name}</span>
-                      <span className="muted"> ({row.item.uom})</span>
-                    </td>
-                    <td className="num">{row.onHandQty}</td>
-                    <td className="num">{row.avgCost?.toFixed?.(2) ?? row.avgCost}</td>
-                  </tr>
+              ) : groupByCategory && grouped ? (
+                Object.entries(grouped).map(([cat, rows]) => (
+                  <React.Fragment key={cat}>
+                    <tr className="category-header-row">
+                      <td colSpan={3}>
+                        <strong>{CATEGORY_LABELS[cat] ?? cat}</strong>
+                        <span className="muted"> ({rows.length} items)</span>
+                      </td>
+                    </tr>
+                    {rows.map(renderStockRow)}
+                  </React.Fragment>
                 ))
+              ) : (
+                stockItems.map(renderStockRow)
               )}
             </tbody>
           </table>

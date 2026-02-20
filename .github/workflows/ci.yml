@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+
+      - name: Install client dependencies
+        run: pnpm install
+        working-directory: client
+
+      - name: Lint client
+        run: pnpm run lint
+        working-directory: client
+
+      - name: Build client
+        run: pnpm run build
+        working-directory: client
+
+      - name: Install server dependencies
+        run: npm ci
+        working-directory: server
+
+      - name: Build server
+        run: npm run build
+        working-directory: server
+

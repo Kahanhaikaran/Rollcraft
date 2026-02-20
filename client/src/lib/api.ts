@@ -95,6 +95,7 @@ const demoPayrollEntries = [
 function getDemoResponse(path: string, method: string, body?: string): unknown {
   if (method === 'GET') {
     if (path.includes('/kitchens')) return { ok: true as const, kitchens: demoKitchens };
+    if (path.includes('/items/categories')) return { ok: true as const, categories: ['BASE_CORE', 'VEG_FILLINGS', 'SAUCES', 'PACKAGING', 'MISC'] };
     if (path.includes('/items')) return { ok: true as const, items: demoItems };
     if (path.includes('/stock')) {
       const match = path.match(/kitchenId=([^&]+)/);
@@ -201,9 +202,22 @@ export const api = {
     request<ApiOk<Record<string, never>>>('/auth/logout', { method: 'POST' }),
 
   kitchens: () => request<ApiOk<{ kitchens: unknown[] }>>('/kitchens'),
-  items: () => request<ApiOk<{ items: unknown[] }>>('/items'),
-  stock: (kitchenId: string) =>
-    request<ApiOk<{ kitchenId: string; stock: unknown[] }>>(`/stock?kitchenId=${encodeURIComponent(kitchenId)}`),
+  items: (params?: { q?: string; category?: string; groupBy?: boolean }) => {
+    const sp = new URLSearchParams();
+    if (params?.q) sp.set('q', params.q);
+    if (params?.category) sp.set('category', params.category);
+    if (params?.groupBy) sp.set('groupBy', '1');
+    const query = sp.toString();
+    return request<ApiOk<{ items: unknown[]; grouped?: Record<string, unknown[]> }>>(`/items${query ? `?${query}` : ''}`);
+  },
+  itemCategories: () => request<ApiOk<{ categories: string[] }>>('/items/categories'),
+  stock: (kitchenId: string, params?: { q?: string; category?: string; groupBy?: boolean }) => {
+    const sp = new URLSearchParams({ kitchenId });
+    if (params?.q) sp.set('q', params.q);
+    if (params?.category) sp.set('category', params.category);
+    if (params?.groupBy) sp.set('groupBy', '1');
+    return request<ApiOk<{ kitchenId: string; stock: unknown[]; grouped?: Record<string, unknown[]> }>>(`/stock?${sp}`);
+  },
   adjustStock: (input: { kitchenId: string; itemId: string; qtyDelta: number; type?: 'ADJUSTMENT' | 'WASTAGE'; reason?: string }) =>
     request<ApiOk<{ ledger: unknown; nextStock: unknown }>>('/stock/adjustments', { method: 'POST', body: JSON.stringify(input) }),
 
